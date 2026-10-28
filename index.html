@@ -2427,7 +2427,19 @@
   function populateTowerSelects() {
     towerASelect.innerHTML = '<option value="">Selecciona una torre</option>';
     towerBSelect.innerHTML = '<option value="">Selecciona una torre</option>';
-    towers.forEach((t, i) => {
+
+    // Orden alfabético solo para la visualización de los selectores.
+    // El value conserva el índice original de la torre para no alterar
+    // la selección desde el mapa ni el funcionamiento del Sistema de Cortes.
+    const orderedTowers = towers
+      .map((t, i) => ({ t, i }))
+      .sort((a, b) => String(a.t.name || '').localeCompare(
+        String(b.t.name || ''),
+        'es',
+        { sensitivity: 'base', numeric: true }
+      ));
+
+    orderedTowers.forEach(({ t, i }) => {
       const text = `${t.name} (${latLonDmsSigned(t.lat, t.lng)})`;
       const oa = document.createElement('option'); oa.value = i; oa.textContent = text; towerASelect.appendChild(oa);
       const ob = document.createElement('option'); ob.value = i; ob.textContent = text; towerBSelect.appendChild(ob);
