@@ -1130,6 +1130,21 @@
   body.map-first-layout .dock-accordion:not(.open) .dock-accordion-content{ display:none !important; }
 </style>
 
+
+  <style id="burnNoticePopupStyles">
+    .burn-notice-popup .leaflet-popup-content-wrapper{padding:0;border-radius:11px;box-shadow:0 14px 38px rgba(15,23,42,.30);overflow:hidden;}
+    .burn-notice-popup .leaflet-popup-content{margin:0!important;width:auto!important;}
+    .burn-notice-popup .leaflet-popup-close-button{color:#fff!important;font-size:22px!important;top:5px!important;right:6px!important;z-index:5;text-shadow:0 1px 2px rgba(0,0,0,.35);}
+    .burn-notice-popup .leaflet-popup-close-button:hover{color:#fff!important;background:rgba(255,255,255,.15);border-radius:50%;}
+    .burn-notice-popup .leaflet-popup-tip{background:#fff;}
+  </style>
+
+<style id="admin-boundaries-v3-style">
+  .leaflet-control-layers-overlays label:has(input[type="checkbox"]) span{
+    line-height:1.15;
+  }
+</style>
+
 </head>
 <body>
 <div id="splashV55" aria-hidden="true">
@@ -1172,10 +1187,18 @@
 <div class="card">
 <div class="section-title"><h2>Capas de apoyo</h2></div>
 <div class="small">Las capas principales se cargan automáticamente al abrir. Solo puedes subir capas de apoyo.</div>
-<label for="supportFile1">Capa de apoyo 1 (opcional)</label>
+<label for="supportFile1">Nube de puntos de quemas avisadas (KMZ/KML)</label>
 <input accept=".kmz,.kml" id="supportFile1" type="file"/>
+<div class="small" style="margin-top:7px;line-height:1.45;">
+  <b>Simbología original del SAQ:</b><br/>
+  <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ffe000;border:1px solid #7a6500;margin-right:5px;vertical-align:-1px;"></span><b>Aviso de Quema Simple</b>
+  <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f0182d;border:1px solid #8f0f1d;margin:0 5px 0 10px;vertical-align:-1px;"></span><b>Plan de Quema</b><br/>
+  Pasa el mouse para ver el nombre del predio o pincha el punto para abrir la ficha completa del aviso.
+</div>
 <label for="supportFile2">Capa de apoyo 2 (opcional)</label>
 <input accept=".kmz,.kml" id="supportFile2" type="file"/>
+<label for="supportFile3">Capa de apoyo 3 (opcional)</label>
+<input accept=".kmz,.kml" id="supportFile3" type="file"/>
 <button id="loadBtn">Cargar capas de apoyo</button>
 <div class="small" id="loadStatus">Las capas principales y localidades se cargarán automáticamente al abrir.</div>
 </div>
@@ -1293,6 +1316,7 @@
   const airfieldsLayer = L.layerGroup();
   const supportLayer1 = L.layerGroup().addTo(map);
   const supportLayer2 = L.layerGroup().addTo(map);
+  const supportLayer3 = L.layerGroup().addTo(map);
   const linesLayer = L.layerGroup().addTo(map);
   const routeLayer = L.layerGroup().addTo(map);
   const resultLayer = L.layerGroup().addTo(map);
@@ -1306,14 +1330,61 @@
   const historyLayer = L.layerGroup().addTo(map);
   const quickPointLayer = L.layerGroup().addTo(map);
   const sidcoStatesLayer = L.layerGroup().addTo(map);
+
+  // Límites administrativos: visibles por defecto, tenues y bajo las capas operativas.
+  if (!map.getPane('communalLimitsPane')) {
+    const communalLimitsPane = map.createPane('communalLimitsPane');
+    communalLimitsPane.style.zIndex = '312';
+    communalLimitsPane.style.pointerEvents = 'none';
+  }
+  if (!map.getPane('regionalLimitsPane')) {
+    const regionalLimitsPane = map.createPane('regionalLimitsPane');
+    regionalLimitsPane.style.zIndex = '318';
+    regionalLimitsPane.style.pointerEvents = 'none';
+  }
+
+  const communalLimitsLayer = L.geoJSON(null, {
+    pane: 'communalLimitsPane',
+    interactive: false,
+    style: function(){
+      return {
+        color: '#8fa4ba',
+        weight: 0.85,
+        opacity: 0.34,
+        fill: false,
+        fillOpacity: 0,
+        lineCap: 'round',
+        lineJoin: 'round'
+      };
+    }
+  }).addTo(map);
+
+  const regionalLimitsLayer = L.geoJSON(null, {
+    pane: 'regionalLimitsPane',
+    interactive: false,
+    style: function(){
+      return {
+        color: '#6f94bd',
+        weight: 2.6,
+        opacity: 0.52,
+        fill: false,
+        fillOpacity: 0,
+        lineCap: 'round',
+        lineJoin: 'round'
+      };
+    }
+  }).addTo(map);
   const layersControl = L.control.layers(
     { 'Normal': osm, 'Satélite': sat, 'Topográfico': topo },
     {
       'Torres': towersLayer,
       'Bases de brigadas': basesLayer,
       'Zonas de interfaz': interfaceZonesLayer,
-      'Apoyo 1': supportLayer1,
+      'Límites regionales': regionalLimitsLayer,
+      'Límites comunales': communalLimitsLayer,
+      'Quemas avisadas': supportLayer1,
       'Apoyo 2': supportLayer2,
+      'Apoyo 3': supportLayer3,
       'Líneas de azimut': linesLayer,
       'Ruta brigada': routeLayer,
       'Resultado': resultLayer,
@@ -1329,8 +1400,11 @@
       'Torres': towersLayer,
       'Bases de brigadas': basesLayer,
       'Zonas de interfaz': interfaceZonesLayer,
-      'Apoyo 1': supportLayer1,
+      'Límites regionales': regionalLimitsLayer,
+      'Límites comunales': communalLimitsLayer,
+      'Quemas avisadas': supportLayer1,
       'Apoyo 2': supportLayer2,
+      'Apoyo 3': supportLayer3,
       'Líneas de azimut': linesLayer,
       'Ruta brigada': routeLayer,
       'Resultado': resultLayer,
@@ -1339,6 +1413,36 @@
       'Incendios de SIDCO': sidcoStatesLayer
     }
   };
+
+  // Fuente cartográfica: IDE Chile / SUBDERE DPA 2023, distribuida por World-GeoJSON.
+  // Se carga solo geometría administrativa; no bloquea la operación si la red falla.
+  (function loadAdministrativeBoundaries(){
+    const regionUrl = 'https://raw.githubusercontent.com/andresgmg/World-GeoJSON/main/data/earth/CHL/CHL_ADM1.geojson';
+    const communeUrl = 'https://raw.githubusercontent.com/andresgmg/World-GeoJSON/main/data/earth/CHL/CHL_ADM3.geojson';
+
+    async function fetchGeoJSON(url){
+      const res = await fetch(url, { cache: 'force-cache', mode: 'cors' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    Promise.allSettled([
+      fetchGeoJSON(regionUrl),
+      fetchGeoJSON(communeUrl)
+    ]).then(function(results){
+      if (results[0].status === 'fulfilled') {
+        try { regionalLimitsLayer.clearLayers(); regionalLimitsLayer.addData(results[0].value); } catch(e) { console.warn('Límites regionales:', e); }
+      } else {
+        console.warn('No fue posible cargar límites regionales.', results[0].reason);
+      }
+
+      if (results[1].status === 'fulfilled') {
+        try { communalLimitsLayer.clearLayers(); communalLimitsLayer.addData(results[1].value); } catch(e) { console.warn('Límites comunales:', e); }
+      } else {
+        console.warn('No fue posible cargar límites comunales.', results[1].reason);
+      }
+    });
+  })();
 
   function updateZoomDrivenLabels() {
     const mapEl = map.getContainer();
@@ -1378,6 +1482,7 @@
 
   const supportFile1 = document.getElementById('supportFile1');
   const supportFile2 = document.getElementById('supportFile2');
+  const supportFile3 = document.getElementById('supportFile3');
   const loadStatus = document.getElementById('loadStatus');
   const towerASelect = document.getElementById('towerA');
   const towerBSelect = document.getElementById('towerB');
@@ -1927,6 +2032,79 @@
       return toGeoJSON.kml(xml);
     }
     throw new Error('Archivo no soportado. Usa KMZ o KML.');
+  }
+
+
+  async function readKmlXmlDocument(source) {
+    const name = (source.name || '').toLowerCase();
+    if (source.base64) {
+      if ((source.kind || '').toLowerCase() === 'kml' || name.endsWith('.kml')) {
+        return new DOMParser().parseFromString(new TextDecoder().decode(base64ToUint8Array(source.base64)), 'text/xml');
+      }
+      if ((source.kind || '').toLowerCase() === 'kmz' || name.endsWith('.kmz')) {
+        const zip = await JSZip.loadAsync(base64ToUint8Array(source.base64));
+        let kmlEntry = null;
+        zip.forEach((path, entry) => { if (!kmlEntry && path.toLowerCase().endsWith('.kml')) kmlEntry = entry; });
+        if (!kmlEntry) throw new Error(`El archivo ${source.name} no contiene KML.`);
+        return new DOMParser().parseFromString(await kmlEntry.async('text'), 'text/xml');
+      }
+    }
+    if (name.endsWith('.kml')) return new DOMParser().parseFromString(await source.text(), 'text/xml');
+    if (name.endsWith('.kmz')) {
+      const zip = await JSZip.loadAsync(await source.arrayBuffer());
+      let kmlEntry = null;
+      zip.forEach((path, entry) => { if (!kmlEntry && path.toLowerCase().endsWith('.kml')) kmlEntry = entry; });
+      if (!kmlEntry) throw new Error('El KMZ no contiene KML.');
+      return new DOMParser().parseFromString(await kmlEntry.async('text'), 'text/xml');
+    }
+    throw new Error('Archivo no soportado. Usa KMZ o KML.');
+  }
+
+  function burnDescriptionFields(descriptionHtml) {
+    const fields = [];
+    const seen = new Set();
+    if (!descriptionHtml) return fields;
+    try {
+      const doc = new DOMParser().parseFromString(String(descriptionHtml), 'text/html');
+      doc.querySelectorAll('tr').forEach(tr => {
+        const cells = Array.from(tr.children).filter(el => String(el.tagName).toUpperCase() === 'TD');
+        if (cells.length < 2) return;
+        const key = String(cells[0].textContent || '').replace(/\s+/g, ' ').trim();
+        const value = String(cells[1].textContent || '').replace(/\s+/g, ' ').trim();
+        if (!key || !value || seen.has(key)) return;
+        // La primera fila de ArcGIS suele repetir solo el nombre del predio en una celda; no entra aquí.
+        seen.add(key);
+        fields.push({ key, value });
+      });
+    } catch (_) {}
+    return fields;
+  }
+
+  async function readBurnNoticeGeoJson(source) {
+    const xml = await readKmlXmlDocument(source);
+    const placemarks = Array.from(xml.getElementsByTagName('Placemark'));
+    const features = [];
+    placemarks.forEach((pm, idx) => {
+      const point = pm.getElementsByTagName('Point')[0];
+      const coordNode = point?.getElementsByTagName('coordinates')[0];
+      if (!coordNode) return;
+      const rawCoord = String(coordNode.textContent || '').trim().split(/\s+/)[0];
+      const parts = rawCoord.split(',').map(Number);
+      if (parts.length < 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return;
+
+      const name = String(pm.getElementsByTagName('name')[0]?.textContent || `Quema avisada ${idx+1}`).trim();
+      const description = String(pm.getElementsByTagName('description')[0]?.textContent || '');
+      const styleUrl = String(pm.getElementsByTagName('styleUrl')[0]?.textContent || '').trim();
+      const properties = { name, description, styleUrl };
+      burnDescriptionFields(description).forEach(({key, value}) => { properties[key] = value; });
+
+      features.push({
+        type:'Feature',
+        geometry:{ type:'Point', coordinates:[parts[0], parts[1]] },
+        properties
+      });
+    });
+    return { type:'FeatureCollection', features };
   }
 
   function getPointFeatures(geojson) {
@@ -2620,19 +2798,269 @@
       });
   }
 
+  function supportFeatureLabel(feature, fallback = 'Punto sin etiqueta') {
+    const p = feature?.properties || {};
+    return String(p.name || p.Name || p.NAME || p.Nombre_pre || p.NOMBRE || fallback).trim() || fallback;
+  }
+
+  function escapeSupportHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function supportPopupHtml(label, kind = 'Capa de apoyo', latlng = null) {
+    const safe = escapeSupportHtml(label);
+    const coord = latlng ? `<div style="margin-top:6px;color:#64748b;font-size:11px;">${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}</div>` : '';
+    return `<div style="min-width:190px;font-family:Arial,sans-serif;">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.5px;color:#ff5a67;text-transform:uppercase;">${kind}</div>
+      <div style="margin-top:4px;font-size:14px;font-weight:800;color:#13243a;line-height:1.25;">${safe}</div>
+      ${coord}
+    </div>`;
+  }
+
+  function burnNoticeFields(feature) {
+    const p = feature?.properties || {};
+    const result = [];
+    const seen = new Set();
+    const rawDescription = p.description || p.Description || p.DESCRIPTION || '';
+
+    burnDescriptionFields(rawDescription).forEach(item => {
+      if (!item.key || !item.value || seen.has(item.key)) return;
+      seen.add(item.key);
+      result.push(item);
+    });
+
+    // Respaldo: solo datos reales del aviso. Nunca se muestran propiedades de estilo del KML.
+    const blocked = new Set([
+      'name','Name','NAME','description','Description','DESCRIPTION','styleUrl','styleHash','styleMapHash','visibility',
+      'fill','fill-opacity','stroke','stroke-opacity','stroke-width','label-opacity','label-color','label-scale','icon-scale','icon'
+    ]);
+    Object.entries(p).forEach(([key, value]) => {
+      if (value == null || value === '' || seen.has(key) || blocked.has(key)) return;
+      if (typeof value === 'object') return;
+      seen.add(key);
+      result.push({ key, value: String(value) });
+    });
+    return result;
+  }
+
+  function burnFieldLabel(key) {
+    const labels = {
+      'FID':'FID',
+      'Nombre_pre':'Nombre del predio',
+      'Rol_predio':'Rol del predio',
+      'Region':'Región',
+      'Provincia':'Provincia',
+      'Comuna':'Comuna',
+      'N°_Aviso':'N° de aviso',
+      'Nº_Aviso':'N° de aviso',
+      'Superficie':'Superficie del predio',
+      'Coordenada':'UTM Este',
+      'Coordena_1':'UTM Norte',
+      'Tipo_quema':'Tipo de quema',
+      'Clase_quem':'Clase de quema',
+      'Superfic_1':'Superficie de quema',
+      'Inicio_que':'Inicio de quema',
+      'Fin_quema':'Fin de quema',
+      'Hora_inici':'Hora de inicio',
+      'Hora_fin':'Hora de término',
+      'Tipo_de_av':'Tipo de aviso'
+    };
+    return labels[key] || String(key).replace(/_/g, ' ');
+  }
+
+  function burnFieldValue(fields, keys, fallback = '—') {
+    for (const key of keys) {
+      const item = fields.find(x => x.key === key);
+      if (item && String(item.value).trim()) return String(item.value).trim();
+    }
+    return fallback;
+  }
+
+  function burnNoticeTypeInfo(feature, fields = null) {
+    const f = fields || burnNoticeFields(feature);
+    const raw = burnFieldValue(f, ['Tipo_de_av'], '');
+    const styleUrl = String(feature?.properties?.styleUrl || '');
+    if (/plan\s+de\s+quema/i.test(raw) || /IconStyle00/i.test(styleUrl)) {
+      return { key:'plan', label:'PLAN DE QUEMA', raw:raw || 'Plan de Quema', color:'#f0182d', border:'#a50f20', text:'#ffffff', pale:'#fff1f3' };
+    }
+    if (/aviso\s+de\s+quema/i.test(raw) || /IconStyle027/i.test(styleUrl)) {
+      return { key:'simple', label:'AVISO DE QUEMA SIMPLE', raw:raw || 'Aviso de Quema', color:'#ffe000', border:'#806900', text:'#3f3500', pale:'#fffbea' };
+    }
+    return { key:'other', label:(raw || 'QUEMA AVISADA').toUpperCase(), raw:raw || 'Quema avisada', color:'#f59e0b', border:'#9a6700', text:'#ffffff', pale:'#fff7ed' };
+  }
+
+  function burnInfoItem(label, value, wide = false) {
+    return `<div style="${wide ? 'grid-column:1/-1;' : ''}background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 8px;min-width:0;">
+      <div style="font-size:8.5px;color:#64748b;font-weight:900;text-transform:uppercase;letter-spacing:.45px;">${escapeSupportHtml(label)}</div>
+      <div style="margin-top:2px;font-size:11px;color:#172033;font-weight:800;line-height:1.25;word-break:break-word;">${escapeSupportHtml(value || '—')}</div>
+    </div>`;
+  }
+
+  function burnSection(title, icon, body) {
+    return `<div style="margin-top:9px;">
+      <div style="display:flex;align-items:center;gap:5px;margin:0 0 5px;color:#334155;font-size:9.5px;font-weight:900;text-transform:uppercase;letter-spacing:.55px;">${icon}<span>${title}</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">${body}</div>
+    </div>`;
+  }
+
+  function burnNoticePopupHtml(feature, label, latlng = null) {
+    const fields = burnNoticeFields(feature);
+    const typeInfo = burnNoticeTypeInfo(feature, fields);
+    const get = (keys, fallback='—') => burnFieldValue(fields, keys, fallback);
+
+    const fid = get(['FID']);
+    const nombre = get(['Nombre_pre'], label || '—');
+    const rol = get(['Rol_predio']);
+    const region = get(['Region']);
+    const provincia = get(['Provincia']);
+    const comuna = get(['Comuna']);
+    const aviso = get(['N°_Aviso','Nº_Aviso','N_Aviso']);
+    const supPredio = get(['Superficie']);
+    const utmE = get(['Coordenada']);
+    const utmN = get(['Coordena_1']);
+    const tipoQuema = get(['Tipo_quema']);
+    const claseQuema = get(['Clase_quem']);
+    const supQuema = get(['Superfic_1']);
+    const inicio = get(['Inicio_que']);
+    const fin = get(['Fin_quema']);
+    const hInicio = get(['Hora_inici']);
+    const hFin = get(['Hora_fin']);
+    const tipoAvisoRaw = get(['Tipo_de_av'], typeInfo.raw);
+
+    const standardKeys = new Set(['FID','Nombre_pre','Rol_predio','Region','Provincia','Comuna','N°_Aviso','Nº_Aviso','N_Aviso','Superficie','Coordenada','Coordena_1','Tipo_quema','Clase_quem','Superfic_1','Inicio_que','Fin_quema','Hora_inici','Hora_fin','Tipo_de_av']);
+    const extras = fields.filter(x => !standardKeys.has(x.key));
+    const extraHtml = extras.length ? burnSection('Otros datos del archivo', '＋', extras.map(({key,value}) => burnInfoItem(burnFieldLabel(key), value)).join('')) : '';
+
+    const coordText = latlng ? `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}` : '—';
+    const mapsUrl = latlng ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(latlng.lat + ',' + latlng.lng)}` : '';
+
+    const ident = [
+      burnInfoItem('N° de aviso', aviso),
+      burnInfoItem('FID', fid),
+      burnInfoItem('Nombre del predio', nombre, true),
+      burnInfoItem('Rol del predio', rol, true)
+    ].join('');
+    const ubic = [
+      burnInfoItem('Región', region),
+      burnInfoItem('Provincia', provincia),
+      burnInfoItem('Comuna', comuna, true),
+      burnInfoItem('UTM Este', utmE),
+      burnInfoItem('UTM Norte', utmN)
+    ].join('');
+    const quema = [
+      burnInfoItem('Tipo de quema', tipoQuema, true),
+      burnInfoItem('Clase de quema', claseQuema, true),
+      burnInfoItem('Superficie del predio', supPredio),
+      burnInfoItem('Superficie de quema', supQuema)
+    ].join('');
+    const vigencia = [
+      burnInfoItem('Inicio de quema', inicio),
+      burnInfoItem('Fin de quema', fin),
+      burnInfoItem('Hora de inicio', hInicio),
+      burnInfoItem('Hora de término', hFin),
+      burnInfoItem('Tipo de aviso', typeInfo.label, true)
+    ].join('');
+
+    return `<div style="width:410px;max-width:80vw;font-family:Arial,Helvetica,sans-serif;color:#172033;overflow:hidden;">
+      <div style="background:${typeInfo.color};color:${typeInfo.text};padding:12px 14px 11px;border-bottom:3px solid ${typeInfo.border};">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <div style="font-size:9.5px;font-weight:950;letter-spacing:1px;text-transform:uppercase;">🔥 ${escapeSupportHtml(typeInfo.label)}</div>
+          <div style="font-size:9px;font-weight:900;opacity:.85;white-space:nowrap;">SAQ</div>
+        </div>
+        <div style="margin-top:4px;font-size:18px;font-weight:950;line-height:1.15;">${escapeSupportHtml(nombre || label)}</div>
+        <div style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap;">
+          ${aviso !== '—' ? `<span style="background:rgba(255,255,255,.45);border:1px solid rgba(0,0,0,.10);border-radius:999px;padding:3px 7px;font-size:9.5px;font-weight:900;">Aviso ${escapeSupportHtml(aviso)}</span>` : ''}
+          ${comuna !== '—' ? `<span style="background:rgba(255,255,255,.45);border:1px solid rgba(0,0,0,.10);border-radius:999px;padding:3px 7px;font-size:9.5px;font-weight:900;">📍 ${escapeSupportHtml(comuna)}</span>` : ''}
+        </div>
+      </div>
+
+      <div style="background:#f8fafc;padding:9px 10px 10px;max-height:510px;overflow-y:auto;">
+        <div style="background:${typeInfo.pale};border:1px solid ${typeInfo.border}44;border-radius:9px;padding:8px 9px;display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+          <div><div style="font-size:8px;color:#64748b;font-weight:900;text-transform:uppercase;">Tipo de quema</div><div style="font-size:11px;font-weight:900;line-height:1.25;margin-top:2px;">${escapeSupportHtml(tipoQuema)}</div></div>
+          <div><div style="font-size:8px;color:#64748b;font-weight:900;text-transform:uppercase;">Superficie quema</div><div style="font-size:11px;font-weight:900;margin-top:2px;">${escapeSupportHtml(supQuema)}</div></div>
+          <div><div style="font-size:8px;color:#64748b;font-weight:900;text-transform:uppercase;">Vigencia</div><div style="font-size:10px;font-weight:850;margin-top:2px;">${escapeSupportHtml(inicio)} → ${escapeSupportHtml(fin)}</div></div>
+          <div><div style="font-size:8px;color:#64748b;font-weight:900;text-transform:uppercase;">Horario</div><div style="font-size:10px;font-weight:850;margin-top:2px;">${escapeSupportHtml(hInicio)} – ${escapeSupportHtml(hFin)}</div></div>
+        </div>
+
+        ${burnSection('Identificación', '▣', ident)}
+        ${burnSection('Ubicación', '📍', ubic)}
+        ${burnSection('Quema autorizada', '🔥', quema)}
+        ${burnSection('Vigencia y horario', '◷', vigencia)}
+        ${extraHtml}
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding-top:9px;border-top:1px solid #dbe3ec;">
+          <div style="min-width:0;">
+            <div style="font-size:8px;color:#94a3b8;font-weight:900;text-transform:uppercase;">Coordenadas mapa</div>
+            <div style="font-size:10.5px;color:#475569;font-weight:800;">${escapeSupportHtml(coordText)}</div>
+          </div>
+          ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" style="flex:none;text-decoration:none;background:#0f6bdc;color:#fff;border-radius:8px;padding:8px 11px;font-size:9.5px;font-weight:950;">🧭 ABRIR UBICACIÓN</a>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }
+
   async function loadSupportLayer(file, color, targetLayer) {
-    if (!file) return;
+    if (!file) return 0;
     const geojson = await readKmzOrKml(file);
+    let count = 0;
     L.geoJSON(geojson, {
-      style: () => ({ color, weight:2, opacity:0.75, fillOpacity:0.08 }),
-      pointToLayer: (_, latlng) => L.circleMarker(latlng, { radius:4, color, fillColor:color, fillOpacity:0.7, weight:1 })
+      style: () => ({ color, weight:2, opacity:0.78, fillOpacity:0.10 }),
+      pointToLayer: (feature, latlng) => {
+        count += 1;
+        const marker = L.circleMarker(latlng, { radius:5, color, fillColor:color, fillOpacity:0.82, weight:1.5 });
+        const label = supportFeatureLabel(feature, `Punto ${count}`);
+        marker.bindTooltip(label, { direction:'top', sticky:true, opacity:0.95 });
+        marker.bindPopup(supportPopupHtml(label, 'Capa de apoyo', latlng), { maxWidth:320 });
+        return marker;
+      },
+      onEachFeature: (feature, layer) => {
+        if (feature?.geometry?.type !== 'Point') {
+          const label = supportFeatureLabel(feature, 'Elemento de apoyo');
+          layer.bindTooltip(label, { sticky:true, opacity:0.95 });
+          layer.bindPopup(supportPopupHtml(label, 'Capa de apoyo'), { maxWidth:320 });
+        }
+      }
     }).addTo(targetLayer);
+    return count;
+  }
+
+  async function loadBurnNoticeLayer(file, targetLayer) {
+    if (!file) return 0;
+    // Para SAQ se lee el KML directamente: así preservamos la tabla real del aviso
+    // y evitamos que el conversor GeoJSON mezcle atributos de simbología.
+    const geojson = await readBurnNoticeGeoJson(file);
+    let count = 0;
+    L.geoJSON(geojson, {
+      pointToLayer: (feature, latlng) => {
+        count += 1;
+        const label = supportFeatureLabel(feature, `Quema avisada ${count}`);
+        const typeInfo = burnNoticeTypeInfo(feature);
+        const marker = L.circleMarker(latlng, {
+          radius:7,
+          color:typeInfo.key === 'simple' ? '#6f5d00' : '#ffffff',
+          weight:typeInfo.key === 'simple' ? 1.7 : 2.1,
+          fillColor:typeInfo.color,
+          fillOpacity:1,
+          opacity:1,
+          pane:'markerPane'
+        });
+        marker.bindTooltip(`${typeInfo.key === 'simple' ? '🟡' : '🔴'} ${label}`, { direction:'top', sticky:true, opacity:1, className:'burn-notice-tooltip' });
+        marker.bindPopup(burnNoticePopupHtml(feature, label, latlng), { maxWidth:480, minWidth:380, maxHeight:590, className:'burn-notice-popup' });
+        return marker;
+      }
+    }).addTo(targetLayer);
+    return count;
   }
 
   async function loadLayers() {
     try {
       loadStatus.textContent = 'Procesando capas...';
-      towersLayer.clearLayers(); basesLayer.clearLayers(); waterLayer.clearLayers(); airfieldsLayer.clearLayers(); supportLayer1.clearLayers(); supportLayer2.clearLayers(); forestLayer.clearLayers(); interfaceZonesLayer.clearLayers();
+      towersLayer.clearLayers(); basesLayer.clearLayers(); waterLayer.clearLayers(); airfieldsLayer.clearLayers(); supportLayer1.clearLayers(); supportLayer2.clearLayers(); supportLayer3.clearLayers(); forestLayer.clearLayers(); interfaceZonesLayer.clearLayers();
       towers = []; bases = []; waterSources = []; airfields = []; localityPoints = []; localityPolygons = []; forestParcels = [];
       resetAll();
 
@@ -2677,14 +3105,15 @@
       renderWaterMarkers();
       renderAirfieldMarkers();
       populateTowerSelects();
-      await loadSupportLayer(supportFile1.files[0], '#f59e0b', supportLayer1);
-      await loadSupportLayer(supportFile2.files[0], '#8b5cf6', supportLayer2);
+      const burnCount = await loadBurnNoticeLayer(supportFile1.files[0], supportLayer1);
+      await loadSupportLayer(supportFile2.files[0], '#f59e0b', supportLayer2);
+      await loadSupportLayer(supportFile3.files[0], '#8b5cf6', supportLayer3);
 
       const allBounds = [];
       [towers, bases, waterSources, airfields].forEach(arr => arr.forEach(p => allBounds.push([p.lat, p.lng])));
       if (allBounds.length) map.fitBounds(L.latLngBounds(allBounds).pad(0.25));
 
-      loadStatus.textContent = `Capas principales cargadas automáticamente. Zonas de interfaz CENIA activas por defecto. Localidades cargadas para análisis interno. Apoyos cargados: ${supportFile1.files[0] ? '1' : '0'} / ${supportFile2.files[0] ? '1' : '0'}.`;
+      loadStatus.textContent = `Capas principales cargadas automáticamente. Quemas avisadas: ${supportFile1.files[0] ? `${burnCount} puntos` : 'sin archivo'}. Apoyos adicionales: ${(supportFile2.files[0] ? 1 : 0) + (supportFile3.files[0] ? 1 : 0)} / 2.`;
       setResult('Capas cargadas correctamente.');
     } catch (err) {
       console.error(err);
@@ -3417,9 +3846,11 @@ ____________________`;
       loadStatus.textContent = 'Procesando capas de apoyo...';
       supportLayer1.clearLayers();
       supportLayer2.clearLayers();
-      await loadSupportLayer(supportFile1.files[0], '#f59e0b', supportLayer1);
-      await loadSupportLayer(supportFile2.files[0], '#8b5cf6', supportLayer2);
-      loadStatus.textContent = `Capas de apoyo actualizadas. Apoyos cargados: ${supportFile1.files[0] ? '1' : '0'} / ${supportFile2.files[0] ? '1' : '0'}.`;
+      supportLayer3.clearLayers();
+      const burnCount = await loadBurnNoticeLayer(supportFile1.files[0], supportLayer1);
+      await loadSupportLayer(supportFile2.files[0], '#f59e0b', supportLayer2);
+      await loadSupportLayer(supportFile3.files[0], '#8b5cf6', supportLayer3);
+      loadStatus.textContent = `Capas de apoyo actualizadas. Quemas avisadas: ${supportFile1.files[0] ? `${burnCount} puntos` : 'sin archivo'}. Apoyos adicionales: ${(supportFile2.files[0] ? 1 : 0) + (supportFile3.files[0] ? 1 : 0)} / 2.`;
     } catch (err) {
       console.error(err);
       loadStatus.textContent = 'Error al cargar capas de apoyo.';
@@ -8876,7 +9307,7 @@ body.map-first-layout #mapLayersDock .leaflet-control-layers-overlays label{min-
 (function(){
   const layerAliases = {
     'Normal':'Normal','Satelite':'Satélite','Satélite':'Satélite','Topografico':'Topográfico','Topográfico':'Topográfico',
-    'Torres':'Torres','Bases de brigadas':'Bases de brigadas','Apoyo 1':'Apoyo 1','Apoyo 2':'Apoyo 2','Lineas de azimut':'Líneas de azimut','Líneas de azimut':'Líneas de azimut',
+    'Torres':'Torres','Bases de brigadas':'Bases de brigadas','Quemas avisadas':'Quemas avisadas','Apoyo 1':'Quemas avisadas','Apoyo 2':'Apoyo 2','Apoyo 3':'Apoyo 3','Lineas de azimut':'Líneas de azimut','Líneas de azimut':'Líneas de azimut',
     'Ruta brigada':'Ruta brigada','Resultado':'Resultado','Historial de focos':'Historial de focos','Marcacion rapida':'Marcación rápida','Marcación rápida':'Marcación rápida','Incendios de SIDCO':'Incendios de SIDCO','Infraestructura critica 5 km':'Infraestructura crítica 5 km','Infraestructura crítica 5 km':'Infraestructura crítica 5 km'
   };
   function normalize(s){ return (s||'').replace(/\s+/g,' ').trim(); }
