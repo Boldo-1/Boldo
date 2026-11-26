@@ -1279,9 +1279,9 @@
 <textarea class="visually-hidden" id="coordsBox"></textarea>
 <textarea class="visually-hidden" id="kmlBox"></textarea>
 <div class="card">
-<h2>Copiar despacho terrestre</h2>
-<textarea id="terrainDispatchBox" placeholder="Aquí aparecerá el mensaje de despacho terrestre listo para copiar y enviar por WhatsApp."></textarea>
-<button class="secondary copybtn" id="copyTerrainDispatchBtn">Copiar despacho terrestre</button>
+<h2 class="visually-hidden">Copiar despacho terrestre</h2>
+<textarea class="visually-hidden" id="terrainDispatchBox" aria-hidden="true" tabindex="-1"></textarea>
+<button class="secondary copybtn" id="copyTerrainDispatchBtn" type="button">📋 Copiar despacho terrestre</button>
 </div>
 <div class="card">
 <h2>Copiar despacho helicóptero</h2>
@@ -2284,6 +2284,7 @@
     messageBox.value = '';
     coordsBox.value = '';
     kmlBox.value = '';
+    terrainDispatchBox.value = '';
     lastKmlContent = '';
     lastWeather = null;
   }
@@ -3464,6 +3465,23 @@
     lastWeather = item.weather || null;
     lastCommune = item.commune || '';
     lastFocus = { lng:item.lng, lat:item.lat, latLonDms:coordsBox.value || item.coords, sourceLabel:item.sourceLabel };
+    const historicTerrain = String(outputs.terrainDispatch || '').trim();
+    if (historicTerrain.includes('*ELEMENTOS EXPUESTOS EN UN RADIO DE 5 KM*')) {
+      terrainDispatchBox.value = historicTerrain;
+    } else {
+      const focus = { lat: Number(item.lat), lng: Number(item.lng) };
+      const oldIntro = historicTerrain.match(/Tenemos despacho para la unidad[^\r\n]*/i)?.[0];
+      let newTerrain = buildTerrainDispatch({
+        greeting: getGreetingForDate(new Date(item.createdAt || Date.now())),
+        focusCoords: String(item.coords || coordsBox.value || ''), focusCoordsDecimal: focus,
+        commune: String(item.commune || ''), locality: String(item.locality || ''),
+        weatherWhatsapp: buildWeatherWhatsappLines(item.weather || null, item.weatherStation || null),
+        googleMapsLink: `https://www.google.com/maps/dir/?api=1&destination=${focus.lat.toFixed(6)},${focus.lng.toFixed(6)}&travelmode=driving`,
+        wazeLink: `https://www.waze.com/ul?ll=${focus.lat.toFixed(6)},${focus.lng.toFixed(6)}&navigate=yes`
+      });
+      if (oldIntro) newTerrain = newTerrain.replace(/Tenemos despacho para la unidad[^\r\n]*/, () => oldIntro);
+      terrainDispatchBox.value = newTerrain;
+    }
     renderHistoryList();
   }
 
@@ -3571,6 +3589,43 @@ Ráfagas: ${gusts}
 Dirección del viento: ${windDir}${stationBlock}`;
   }
 
+  function formatTerrainDispatchWeather(weatherText) {
+    const icons = [
+      [/^Temperatura:/i, '🌡️'], [/^Humedad relativa:/i, '💧'],
+      [/^Velocidad del viento:/i, '💨'], [/^Ráfagas:/i, '🌬️'],
+      [/^Dirección del viento:/i, '🧭'], [/^Estación Meteorológica:/i, '📡'],
+      [/^Coord\. estación:/i, '📍']
+    ];
+    return String(weatherText || 'No disponibles.').split(/\r?\n/)
+      .map(line => line.trim()).filter(line => line && !/^Condiciones meteorológicas(?: actuales)?:/i.test(line))
+      .map(line => { const entry = icons.find(([pattern]) => pattern.test(line)); return entry ? `• ${entry[1]} ${line}` : line; })
+      .join('\n') || 'No disponibles.';
+  }
+
+  function terrainDispatchContext(focus, waters) {
+    let ctx = null;
+    if (focus && Number.isFinite(focus.lat) && Number.isFinite(focus.lng)) {
+      try { ctx = window.boldoDispatchSensitiveContext(focus.lng, focus.lat); } catch (_) {}
+      if (!Array.isArray(waters)) {
+        try { waters = getNearestWaterSources(focus.lng, focus.lat, 3); } catch (_) {}
+      }
+    }
+    const count = key => Array.isArray(ctx?.[key]) ? ctx[key].length.toLocaleString('es-CL') : 'No disponible';
+    const ordered = (Array.isArray(waters) ? waters : []).filter(w => Number.isFinite(w.distanceKm))
+      .slice().sort((a,b) => a.distanceKm - b.distanceKm).slice(0,3);
+    const nums = ['1️⃣','2️⃣','3️⃣'];
+    const waterText = ordered.length ? ordered.map((w,i) =>
+      `${nums[i]} *${w.name || 'Fuente de agua ' + (i+1)}*\n• 📏 Distancia: ${w.distanceKm.toFixed(2)} km\n• 📍 Coordenadas: ${w.coords || latLonDmsSigned(w.lat,w.lng)}`
+    ).join('\n\n') : 'No hay fuentes de agua disponibles en la base cargada.';
+    return `🏘️ *ELEMENTOS EXPUESTOS EN UN RADIO DE 5 KM*\n\nEn un radio de 5 km a la redonda de las coordenadas estimadas, según las capas disponibles, se registran:\n\n• 🏠 Casas: ${count('buildings')}\n• 🏫 Establecimientos educacionales: ${count('education')}\n• 🏥 Establecimientos de salud: ${count('health')}\n\n💦 *FUENTES DE AGUA MÁS CERCANAS*\nDistancias en línea recta respecto al foco.\n\n${waterText}`;
+  }
+
+  function buildTerrainDispatch({ greeting, focusCoords, focusCoordsDecimal, locality, commune, weatherWhatsapp, waterSources, googleMapsLink, wazeLink }) {
+    const localityText = locality ? `, en la localidad de ${locality}` : '';
+    const communeText = commune ? `, comuna de ${commune}` : '';
+    return `${greeting}.\n\n🚨 *DESPACHO TERRESTRE*\n\nTenemos despacho para la unidad hacia las coordenadas ${focusCoords}${localityText}${communeText}.\n\n🌤️ *CONDICIONES METEOROLÓGICAS*\n\n${formatTerrainDispatchWeather(weatherWhatsapp)}${googleMapsLink || wazeLink ? `\n\n📍 *NAVEGACIÓN AL INCIDENTE*${googleMapsLink ? `\n\n• 🧭 Google Maps:\n${googleMapsLink}` : ''}${wazeLink ? `\n\n• 🚗 Waze:\n${wazeLink}` : ''}` : ''}\n\n${terrainDispatchContext(focusCoordsDecimal,waterSources)}`;
+  }
+
   function updateDispatchBoxes({ greeting, focusCoords, focusCoordsDecimal, commune, locality, weatherWhatsapp, waterSources=[], airfieldName, airfieldCoords }) {
     const googleMapsLink = focusCoordsDecimal && Number.isFinite(focusCoordsDecimal.lat) && Number.isFinite(focusCoordsDecimal.lng)
       ? `https://www.google.com/maps/dir/?api=1&destination=${focusCoordsDecimal.lat.toFixed(6)},${focusCoordsDecimal.lng.toFixed(6)}&travelmode=driving`
@@ -3578,19 +3633,7 @@ Dirección del viento: ${windDir}${stationBlock}`;
     const wazeLink = focusCoordsDecimal && Number.isFinite(focusCoordsDecimal.lat) && Number.isFinite(focusCoordsDecimal.lng)
       ? `https://www.waze.com/ul?ll=${focusCoordsDecimal.lat.toFixed(6)},${focusCoordsDecimal.lng.toFixed(6)}&navigate=yes`
       : '';
-    const localityText = locality ? `, en la localidad de ${locality}` : '';
-    const communeText = commune ? `, comuna de ${commune}` : '';
-    terrainDispatchBox.value = `${greeting}.
-
-Tenemos despacho para la unidad hacia las coordenadas ${focusCoords}${localityText}${communeText}.
-
-${weatherWhatsapp}${googleMapsLink ? `
-
-🧭 Navegación Google Maps:
-${googleMapsLink}` : ''}${wazeLink ? `
-
-🚗 Navegación Waze:
-${wazeLink}` : ''}`;
+    terrainDispatchBox.value = buildTerrainDispatch({ greeting, focusCoords, focusCoordsDecimal, commune, locality, weatherWhatsapp, waterSources, googleMapsLink, wazeLink });
 
     const waterLines = [0,1,2].map((idx) => {
       const item = waterSources[idx];
@@ -3718,6 +3761,7 @@ ____________________`;
       const cycleMin = ((((2 * w.distanceKm) / helicopterSpeedKmh) * 60) + 1);
       return {
         tag: `Fuente de agua ${idx + 1}`,
+        name: w.name,
         coords: latLonDmsSigned(w.lat, w.lng),
         distance: `${w.distanceKm.toFixed(2)} km`,
         cycle: `${cycleMin.toFixed(1)} min`,
@@ -4142,7 +4186,19 @@ ____________________`;
   document.getElementById('copyMessageBtn').addEventListener('click', () => copyText(messageBox.value));
   document.getElementById('copyCoordsBtn').addEventListener('click', () => copyText(coordsBox.value));
   document.getElementById('downloadKmlBtn').addEventListener('click', downloadKmlFile);
-  document.getElementById('copyTerrainDispatchBtn').addEventListener('click', () => copyText(terrainDispatchBox.value));
+  document.getElementById('copyTerrainDispatchBtn').addEventListener('click', () => {
+    const text = String(terrainDispatchBox.value || '').trim();
+    if (!text) { window.boldoCopyToast('⚠️ Primero genera un resultado operacional.'); return; }
+    const done = () => window.boldoCopyToast('✅ Despacho terrestre copiado. Pégalo en WhatsApp.');
+    if (window.boldoLegacyCopy(text)) { done(); return; }
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(text).then(done).catch(() => window.boldoShowManualCopy(text));
+        return;
+      }
+    } catch (_) {}
+    window.boldoShowManualCopy(text);
+  });
   document.getElementById('copyHeliDispatchBtn').addEventListener('click', () => copyText(heliDispatchBox.value));
   document.getElementById('copyPlaneDispatchBtn').addEventListener('click', () => copyText(planeDispatchBox.value));
   document.getElementById('refreshSidcoBtn')?.addEventListener('click', loadSidcoStates);
@@ -6618,6 +6674,8 @@ ____________________`;
       buildings
     };
   }
+
+  window.boldoDispatchSensitiveContext = (lng, lat) => v110BuildSensitiveContext(lng, lat, 5);
 
   function v110RenderSensitiveContext(ctx) {
     if (!v110SensitiveLayer) return;
